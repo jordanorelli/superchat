@@ -3,11 +3,12 @@
   <head>
     <title>this is not chatify</title>
     <link rel=stylesheet href="static/css/style.css" />
-    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js" type="text/javascript" charset="utf-8"></script>
+    <!--<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js" type="text/javascript" charset="utf-8"></script>-->
+    <script src="static/js/jquery.js"></script>
     <script src="static/js/chat.js"></script>
     <script src="static/js/mustache.js"></script>
     <script id="message-template" type="text/plain">
-      <li class="{{msgtype}}">
+      <li class="{{MsgType}}">
         <span class="message-username">{{Username}}</span>
         <span class="message-body">{{{Body}}}</span>
         <!--<span class="message-timestamp">{{TimeStamp}}</span>-->

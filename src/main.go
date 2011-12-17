@@ -7,6 +7,7 @@ import (
     "http"
     "json"
     "os"
+    "runtime"
     "strconv"
     "time"
 )
@@ -17,12 +18,12 @@ var (
 
 type User struct {
     Username string
-    LastPollTime *time.Time
     c chan *ChatMessage
     quit chan bool
 }
 
 type ChatMessage struct {
+    MsgType string
     Username string
     Body string
     TimeStamp *time.Time
@@ -34,17 +35,27 @@ type Room struct {
     c chan *ChatMessage
 }
 
+func NewUser(username string) *User {
+    u := &User{Username: username}
+    u.c = make(chan *ChatMessage, 20)
+    return u
+}
+
+func (m *ChatMessage)WriteToResponse(w http.ResponseWriter) {
+    w.Header()["Content-Type"] = []string{"application/json"}
+    raw, err := json.Marshal([]*ChatMessage{m})
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "something got fucked up in json.Marshal.\n")
+    } else {
+        w.Write(raw)
+    }
+}
+
 func NewRoom() *Room {
     r := new(Room)
     r.Users = list.New()
     r.Messages = ring.New(20)
     return r
-}
-
-func NewUser(username string) *User {
-    u := &User{Username: username}
-    u.c = make(chan *ChatMessage, 20)
-    return u
 }
 
 func (r *Room)getUserElement(username string) (*list.Element, *User) {
@@ -57,6 +68,11 @@ func (r *Room)getUserElement(username string) (*list.Element, *User) {
     return nil, nil
 }
 
+func (r *Room)GetUser(username string) *User {
+    _, user := r.getUserElement(username)
+    return user
+}
+
 func (r *Room)AddUser(username string) (*User, os.Error) {
     user := r.GetUser(username)
     if user != nil {
@@ -64,41 +80,50 @@ func (r *Room)AddUser(username string) (*User, os.Error) {
     }
     user = NewUser(username)
     r.Users.PushBack(user)
-    fmt.Printf("\tUser %s has entered the room.\n", user.Username)
+    r.Announce(fmt.Sprintf("%s has entered the room.", username), false)
+    <-user.c
     return user, nil
 }
 
 func (r *Room)RemoveUser(username string) bool {
     if e, _ := r.getUserElement(username); e != nil {
         r.Users.Remove(e)
-        fmt.Printf("\tUser %s has left the room.\n", username)
+        r.Announce(fmt.Sprintf("%s has left the room.", username), false)
         return true
     }
     return false
 }
 
-func (r *Room)GetUser(username string) *User {
-    _, user := r.getUserElement(username)
-    return user
-}
-
 func (r *Room)AddMessage(msg *ChatMessage) {
     r.Messages = r.Messages.Next()
     r.Messages.Value = msg
-    for e := r.Users.Front(); e != nil; e = e.Next() {
-        user := e.Value.(*User)
-        user.c <- msg
+    for elem := r.Users.Front(); elem != nil; elem = elem.Next() {
+        go func(e *list.Element, m *ChatMessage) {
+            user := e.Value.(*User)
+            user.c <- m
+        }(elem, msg)
     }
 }
 
-func (m *ChatMessage)WriteToResponse(w http.ResponseWriter) {
-    w.Header()["Content-Type"] = []string{"application/json"}
-    raw, err := json.Marshal(m)
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "something got fucked up in json.Marshal.\n")
-    } else {
-        w.Write(raw)
+func (r *Room)MessageHistory() []*ChatMessage {
+    messages := make([]*ChatMessage, r.Messages.Len())
+    i := 0
+    r.Messages.Do(func(val interface{}) {
+        if val == nil { return }
+        messages[i] = val.(*ChatMessage)
+        i += 1
+    })
+    return messages[0:i]
+}
+
+func (r *Room)Announce(msgText string, isError bool) {
+    msg := &ChatMessage{
+        Body: msgText,
+        TimeStamp: time.UTC(),
     }
+
+    if isError { msg.MsgType = "error" } else { msg.MsgType = "system" }
+    r.AddMessage(msg)
 }
 
 func ParseJSONField(r *http.Request, fieldname string) (string, os.Error) {
@@ -113,6 +138,16 @@ func ParseJSONField(r *http.Request, fieldname string) (string, os.Error) {
         return "", err
     }
     return l[fieldname], nil
+}
+
+func JSONResponse(w http.ResponseWriter, val interface{}) {
+    w.Header()["Content-Type"] = []string{"application/json"}
+    raw, err := json.Marshal(val)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "something got fucked up in json.Marshal.\n")
+    } else {
+        w.Write(raw)
+    }
 }
 
 // given an http.Request r, returns the username associated with the given
@@ -134,8 +169,7 @@ func ParseMessage(r *http.Request) (*ChatMessage, os.Error) {
     }
     from := room.GetUser(ParseUsername(r))
 
-    fmt.Printf("\tReceived message from user %s with length %d\n", from.Username, msgLength)
-    m := &ChatMessage{Username: from.Username, TimeStamp: time.UTC()}
+    m := &ChatMessage{Username: from.Username, TimeStamp: time.UTC(), MsgType: "user"}
     raw := make([]byte, msgLength)
     r.Body.Read(raw)
     if err := json.Unmarshal(raw, m); err != nil {
@@ -145,20 +179,23 @@ func ParseMessage(r *http.Request) (*ChatMessage, os.Error) {
 }
 
 func Home(w http.ResponseWriter, r *http.Request) {
-    if r.RawURL == "/favicon.ico" {
-        return
-    }
-    fmt.Fprintf(os.Stdout, "%s %s\n", r.Method, r.RawURL)
+    if r.RawURL == "/favicon.ico" { return }
     http.ServeFile(w, r, "templates/index.html")
 }
 
 func LoginMux(w http.ResponseWriter, r *http.Request) {
-    fmt.Fprintf(os.Stdout, "%s %s\n", r.Method, r.RawURL)
     switch r.Method {
-    case "POST":
-        Login(w, r)
-    case "DELETE":
-        Logout(w, r)
+    case "POST": Login(w, r)
+    case "DELETE": Logout(w, r)
+    }
+}
+
+func LogWrap(fn func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        if r.RawURL != "/favicon.ico" {
+            fmt.Fprintf(os.Stdout, "%s %s\n", r.Method, r.RawURL)
+        }
+        fn(w, r)
     }
 }
 
@@ -177,6 +214,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 
     cookie := &http.Cookie{Name: "username", Value: user.Username, HttpOnly: true}
     http.SetCookie(w, cookie)
+    JSONResponse(w, room.MessageHistory())
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
@@ -188,12 +226,9 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func FeedMux(w http.ResponseWriter, r *http.Request) {
-    fmt.Fprintf(os.Stdout, "%s %s\n", r.Method, r.RawURL)
     switch r.Method {
-    case "GET":
-        Poll(w, r)
-    case "POST":
-        Post(w, r)
+    case "GET": Poll(w, r)
+    case "POST": Post(w, r)
     }
 }
 
@@ -207,17 +242,12 @@ func Post(w http.ResponseWriter, r *http.Request) {
 }
 
 func Poll(w http.ResponseWriter, r *http.Request) {
-    timeout := make(chan bool)
-    go func() {
-        time.Sleep(1.2e11) // two minutes.
-        timeout <- true
-    }()
     user := room.GetUser(ParseUsername(r))
-    var msg *ChatMessage
+    timeout := make(chan bool, 1)
+    go func() { time.Sleep(1.2e11); timeout <- true }() // two minute timeout
     if user.c != nil {
         select {
-        case msg = <-user.c:
-            msg.WriteToResponse(w)
+        case msg := <-user.c: msg.WriteToResponse(w)
         case <-timeout: return
         }
     } else {
@@ -227,15 +257,16 @@ func Poll(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+    runtime.GOMAXPROCS(8)
     port := "0.0.0.0:8080"
     room = NewRoom()
     staticDir := http.Dir("/projects/go/chat/static")
     staticServer := http.FileServer(staticDir)
 
-    http.HandleFunc("/", Home)
-    http.HandleFunc("/feed", FeedMux)
-    http.HandleFunc("/login", LoginMux)
+    http.HandleFunc("/", LogWrap(Home))
+    http.HandleFunc("/feed", LogWrap(FeedMux))
+    http.HandleFunc("/login", LogWrap(LoginMux))
     http.Handle("/static/", http.StripPrefix("/static", staticServer))
-    fmt.Printf("Serving at %s ----------------------------------------------------", port)
+    fmt.Printf("Serving at %s ----------------------------------------------------\n", port)
     http.ListenAndServe(port, nil)
 }

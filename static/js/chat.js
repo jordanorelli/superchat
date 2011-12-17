@@ -24,7 +24,7 @@ var Chat = (function($) {
     return text.replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-  }
+  };
 
   // Formats the message for display.
   // Replaces newlines with the <br /> element
@@ -37,20 +37,19 @@ var Chat = (function($) {
     .replace(/\n/g, "<br/>")
     .replace(/\s/g, "&nbsp;")
     .replace(/(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig, '<a href="$1" target="_blank">$1</a>');
-  }
-
+  };
 
   // Scrolls the window to the bottom of the chat dialogue.
   var scrollToEnd = function() {
     $(document).scrollTop($(document).height() + 500);
-  }
+  };
 
   // A primitve UI state controller. Call with true to show the "logged in" UI;
   // call with false to show the "logged out" UI.
   var setChatDisplay = function (enabled) {
     $loginElements.toggle(!enabled);
     $chatElements.toggle(enabled);
-  }
+  };
 
   // Performs an ajax call to log the user in.  Sends an empty POST request
   // with the username in the request URL.
@@ -74,6 +73,7 @@ var Chat = (function($) {
         setChatDisplay(true);
         $loginErrors.toggle(false);
         $composeMessageField.focus();
+        displayMessages(data);
         poll();
       },
       error: function(XMLHttpRequest, textStatus, errorThrown) {
@@ -102,32 +102,34 @@ var Chat = (function($) {
         logoutClient()
       }
     });
-  }
+  };
 
   // performs all the local actions needed to log a user out
   // this will get called without logout ajax call when a session is expired
   var logoutClient = function() {
-    console.log("logging out...");
     setChatDisplay(false);
     username = '';
     loggedIn = false;
+    lastMessageTimestamp = 0;
     $usernameField.val('');
     $usernameField.focus();
-  }
+  };
 
   // Given a list of messages, appends them to the $messageContainer element,
   // according to the Mustache template defined as messageTemplate.
   var displayMessages = function(messages) {
     $(messages).each(function(){
-      console.log(this.Body);
       this.Body = format(sanitize(this.Body));
-      console.log(this.Body);
       $messageContainer.append(renderMessage(this));
       if(this.TimeStamp && this.TimeStamp > lastMessageTimestamp) {
         lastMessageTimestamp = this.TimeStamp;
       }
     });
     scrollToEnd();
+  };
+
+  var clearMessages = function() {
+    $messageContainer.empty();
   };
 
   // Renders a message object using the Mustache template stored in the
@@ -155,9 +157,19 @@ var Chat = (function($) {
   var sendMessageClick = function(event) {
     var $this = $(this);
     var message = $.trim($composeMessageField.val());
-    $this.attr("disabled", "disabled");
+    // $this.attr("disabled", "disabled");
     $composeMessageField.blur();
     $composeMessageField.attr("disabled", "disabled");
+
+    if (message.charAt(0) === '/') {
+      $composeMessageField.val("");
+      $composeMessageField.removeAttr("disabled");
+      $composeMessageField.focus();
+      $this.removeAttr("disabled");
+      event.preventDefault();
+      event.stopPropagation();
+      return false;
+    }
 
     $.ajax({
       type: 'POST',
@@ -177,7 +189,7 @@ var Chat = (function($) {
       complete: function() {
         $composeMessageField.removeAttr("disabled");
         $composeMessageField.focus();
-        $this.removeAttr("disabled");
+        // $this.removeAttr("disabled");
       }
     });
 
@@ -212,7 +224,6 @@ var Chat = (function($) {
   // if the session has timed out, boot them
   // if there is a network error, assume the server is down, boot them
   var handleError = function($errorElement, textStatus, errorThrown) {
-    console.log(textStatus, errorThrown);
     if(errorThrown === 'Authentication failed') {
       logoutClient();
       $loginErrors.text('Authentication failed! Perhaps your session expired.');
@@ -227,7 +238,15 @@ var Chat = (function($) {
       $errorElement.text(errorThrown);
       $errorElement.toggle(true);
     }
-  }
+  };
+
+  var cmds = {
+    '/clear': clearMessages
+  };
+
+  var runCmd = function(cmd) {
+    cmds[cmd]();
+  };
 
   // Our main setup function.  This function performs no dom manipulation directly,
   // so the layout of your page is preserved after it is called. Accepts a
@@ -263,12 +282,14 @@ var Chat = (function($) {
     });
 
     $composeMessageField.keydown(function(event) {
-      if(event.keyCode == 13 && !event.shiftKey){
+      if(event.keyCode == 13 && !event.shiftKey) {
         if($.trim($composeMessageField.val())){
           $sendMessageButton.click();
         } else {
           return false;
         }
+      } else if(event.keyCode == 76 && event.ctrlKey) {
+        clearMessages();
       }
     });
 
@@ -279,7 +300,6 @@ var Chat = (function($) {
         }
       }
     });
-
 
     $(window).unload(function(event){
       logout();
