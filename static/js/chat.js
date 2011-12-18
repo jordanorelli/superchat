@@ -246,12 +246,23 @@ var Chat = (function($) {
 
   var roll = function() {
     $.ajax({
-      type: "GET",
+      type: "POST",
       url: "/roll",
       async: true,
       timeout: 60000,
+      error: function(XMLHttpRequest, textStatus, errorThrown) {
+        console.log(XMLHttpRequest, textStatus, errorThrown);
+      }
+    });
+  }
+
+  var rollOff = function() {
+    $.ajax({
+      type: "POST",
+      url: "/rolloff",
+      async: true,
+      timeout: 60000,
       success: function(data) {
-        console.log(data);
       },
       error: function(XMLHttpRequest, textStatus, errorThrown) {
         console.log(XMLHttpRequest, textStatus, errorThrown);
@@ -303,11 +314,19 @@ var Chat = (function($) {
   var cmds = {
     '/clear': clearMessages,
     '/users': getUsers,
-    '/roll': roll
+    '/roll': roll,
+    '/rolloff': rollOff
   };
 
   var runCmd = function(cmd) {
-    cmds[cmd]();
+    if(cmd in cmds){
+      cmds[cmd]();
+    } else {
+      displayMessages([{
+        Body: "Unknown command: " + cmd,
+        MsgType: "error"
+      }]);
+    }
   };
 
   // Our main setup function.  This function performs no dom manipulation directly,
