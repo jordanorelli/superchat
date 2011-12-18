@@ -1,3 +1,8 @@
+/*
+* status: 500
+* statusText: "blah blah"
+*/
+
 var Chat = (function($) {
   var $loginElements;           // elements shown when the user is logged out
   var $usernameField;           // allows the user to input a desired username
@@ -18,6 +23,8 @@ var Chat = (function($) {
   var lastMessageTimestamp = 0; // Timestamp of the last message received
                                 // Timestamp is represented as unix epoch time, in
                                 // milliseconds.  Probably should truncate that.
+  var errorCount = 0;
+  var debug = true;
 
   // Removes (some) HTML characters to prevent HTML injection.
   var sanitize = function(text) {
@@ -55,6 +62,10 @@ var Chat = (function($) {
   // with the username in the request URL.
   var login = function() {
     var desiredUsername = $.trim($usernameField.val());
+    if(desiredUsername.match(/\s/)){
+      handleError($loginErrors, "", "desired username " + desiredUsername + " contains invalid whitespace");
+      return false;
+    };
     $.ajax({
       type: "POST",
       url: "/login",
@@ -77,7 +88,11 @@ var Chat = (function($) {
         poll();
       },
       error: function(XMLHttpRequest, textStatus, errorThrown) {
+        if(debug){
+          console.log(XMLHttpRequest, textStatus, errorThrown);
+        }
         handleError($loginErrors, textStatus, errorThrown);
+        return false;
       }
     });
   };
@@ -155,19 +170,20 @@ var Chat = (function($) {
   // processes a send message request.  The message is sent as a POST request,
   // with the message text defined in the POST body.
   var sendMessageClick = function(event) {
-    var $this = $(this);
+    // var $this = $(this);
     var message = $.trim($composeMessageField.val());
     // $this.attr("disabled", "disabled");
     $composeMessageField.blur();
     $composeMessageField.attr("disabled", "disabled");
 
-    if (message.charAt(0) === '/') {
+    if (message[0] === '/') {
       $composeMessageField.val("");
       $composeMessageField.removeAttr("disabled");
       $composeMessageField.focus();
-      $this.removeAttr("disabled");
+      // $this.removeAttr("disabled");
       event.preventDefault();
       event.stopPropagation();
+      runCmd(message);
       return false;
     }
 
@@ -184,6 +200,8 @@ var Chat = (function($) {
         $chatErrors.toggle(false);
       },
       error: function(XMLHttpRequest, textStatus, errorThrown) {
+        console.log("ERROR!");
+        console.log(XMLHttpRequest, textStatus, errorThrown);
         handleError($chatErrors, textStatus, errorThrown);
       },
       complete: function() {
@@ -209,13 +227,54 @@ var Chat = (function($) {
       async: true,
       timeout: 1200000,
       success: function(data) {
+        errorCount = 0;
         displayMessages(data);
       },
       error: function(XMLHttpRequest, textStatus, errorThrown) {
+        errorCount += 1;
+        console.log("ERROR!");
+        console.log(XMLHttpRequest, textStatus, errorThrown);
         handleError($chatErrors, textStatus, errorThrown);
       },
       complete: function() {
-        poll();
+        if(errorCount < 3) {
+          poll();
+        }
+      }
+    });
+  };
+
+  var roll = function() {
+    $.ajax({
+      type: "GET",
+      url: "/roll",
+      async: true,
+      timeout: 60000,
+      success: function(data) {
+        console.log(data);
+      },
+      error: function(XMLHttpRequest, textStatus, errorThrown) {
+        console.log(XMLHttpRequest, textStatus, errorThrown);
+      }
+    });
+  }
+
+  var getUsers = function() {
+    $.ajax({
+      type: "GET",
+      url: "/users",
+      async: true,
+      timeout: 60000,
+      success: function(data) {
+        var body = "Users online: ";
+        body += $.map(data, function(user){return user.Username;}).join(', ');
+        displayMessages([{
+          Body: body,
+          MsgType: "system"
+        }]);
+      },
+      error: function(XMLHttpRequest, textStatus, errorThrown) {
+        console.log(XMLHttpRequest, textStatus, errorThrown);
       }
     });
   };
@@ -224,6 +283,7 @@ var Chat = (function($) {
   // if the session has timed out, boot them
   // if there is a network error, assume the server is down, boot them
   var handleError = function($errorElement, textStatus, errorThrown) {
+    console.log(textStatus, errorThrown);
     if(errorThrown === 'Authentication failed') {
       logoutClient();
       $loginErrors.text('Authentication failed! Perhaps your session expired.');
@@ -241,7 +301,9 @@ var Chat = (function($) {
   };
 
   var cmds = {
-    '/clear': clearMessages
+    '/clear': clearMessages,
+    '/users': getUsers,
+    '/roll': roll
   };
 
   var runCmd = function(cmd) {

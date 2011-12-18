@@ -7,6 +7,7 @@ import (
     "http"
     "json"
     "os"
+    "rand"
     "runtime"
     "strconv"
     "time"
@@ -71,6 +72,16 @@ func (r *Room)getUserElement(username string) (*list.Element, *User) {
 func (r *Room)GetUser(username string) *User {
     _, user := r.getUserElement(username)
     return user
+}
+
+func (r *Room)GetAllUsers() []*User {
+    users := make([]*User, r.Users.Len())
+    i := 0
+    for e := r.Users.Front(); e != nil; e = e.Next() {
+        users[i] = e.Value.(*User)
+        i += 1
+    }
+    return users
 }
 
 func (r *Room)AddUser(username string) (*User, os.Error) {
@@ -245,7 +256,7 @@ func Poll(w http.ResponseWriter, r *http.Request) {
     user := room.GetUser(ParseUsername(r))
     timeout := make(chan bool, 1)
     go func() { time.Sleep(1.2e11); timeout <- true }() // two minute timeout
-    if user.c != nil {
+    if user != nil && user.c != nil {
         select {
         case msg := <-user.c: msg.WriteToResponse(w)
         case <-timeout: return
@@ -254,6 +265,16 @@ func Poll(w http.ResponseWriter, r *http.Request) {
         fmt.Fprintf(os.Stderr, "the user %s has a null incoming channel.\n", user.Username)
         return
     }
+}
+
+func GetUsers(w http.ResponseWriter, r *http.Request) {
+    JSONResponse(w, room.GetAllUsers())
+}
+
+func Roll(w http.ResponseWriter, r *http.Request) {
+    num := rand.Intn(100) + 1
+    username := ParseUsername(r)
+    room.Announce(fmt.Sprintf("%s rolled %d\n", username, num), false)
 }
 
 func main() {
@@ -266,6 +287,8 @@ func main() {
     http.HandleFunc("/", LogWrap(Home))
     http.HandleFunc("/feed", LogWrap(FeedMux))
     http.HandleFunc("/login", LogWrap(LoginMux))
+    http.HandleFunc("/users", LogWrap(GetUsers))
+    http.HandleFunc("/roll", LogWrap(Roll))
     http.Handle("/static/", http.StripPrefix("/static", staticServer))
     fmt.Printf("Serving at %s ----------------------------------------------------\n", port)
     http.ListenAndServe(port, nil)
