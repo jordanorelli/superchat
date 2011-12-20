@@ -1,8 +1,3 @@
-/*
-* status: 500
-* statusText: "blah blah"
-*/
-
 var Chat = (function($) {
   var $loginElements;           // elements shown when the user is logged out
   var $usernameField;           // allows the user to input a desired username
@@ -53,7 +48,7 @@ var Chat = (function($) {
 
   // A primitve UI state controller. Call with true to show the "logged in" UI;
   // call with false to show the "logged out" UI.
-  var setChatDisplay = function (enabled) {
+  var setChatDisplay = function(enabled) {
     $loginElements.toggle(!enabled);
     $chatElements.toggle(enabled);
   };
@@ -79,6 +74,7 @@ var Chat = (function($) {
       timeout: 5000,
       success: function(data){
         username = desiredUsername;
+        console.log("Logged in as: ", username)
         loggedIn = true;
         $usernameDisplay.text(username);
         setChatDisplay(true);
@@ -124,6 +120,7 @@ var Chat = (function($) {
   var logoutClient = function() {
     setChatDisplay(false);
     username = '';
+    console.log("Cleared username");
     loggedIn = false;
     lastMessageTimestamp = 0;
     $usernameField.val('');
@@ -134,7 +131,7 @@ var Chat = (function($) {
   // according to the Mustache template defined as messageTemplate.
   var displayMessages = function(messages) {
     $(messages).each(function(){
-      this.Body = format(sanitize(this.Body));
+      // this.Body = format(sanitize(this.Body));
       $messageContainer.append(renderMessage(this));
       if(this.TimeStamp && this.TimeStamp > lastMessageTimestamp) {
         lastMessageTimestamp = this.TimeStamp;
@@ -227,6 +224,7 @@ var Chat = (function($) {
       async: true,
       timeout: 1200000,
       success: function(data) {
+        console.log("Got some messages.  My username:", username);
         errorCount = 0;
         displayMessages(data);
       },
@@ -259,10 +257,11 @@ var Chat = (function($) {
   var rollOff = function() {
     $.ajax({
       type: "POST",
-      url: "/rolloff",
+      url: "/roll-off",
       async: true,
       timeout: 60000,
       success: function(data) {
+        console.log(data);
       },
       error: function(XMLHttpRequest, textStatus, errorThrown) {
         console.log(XMLHttpRequest, textStatus, errorThrown);
@@ -315,7 +314,7 @@ var Chat = (function($) {
     '/clear': clearMessages,
     '/users': getUsers,
     '/roll': roll,
-    '/rolloff': rollOff
+    '/roll-off': rollOff
   };
 
   var runCmd = function(cmd) {
@@ -394,6 +393,8 @@ var Chat = (function($) {
       if($.trim($composeMessageField.val()))
         sendMessageClick(event);
     });
+
+    console.log("Build chat window complete!  Username: ", username);
   };
 
   // set a short default timeout
@@ -401,6 +402,9 @@ var Chat = (function($) {
   $.ajaxSetup({ timeout: 3000 } );
 
   return {
-    buildChatWindow: buildChatWindow
+    buildChatWindow: buildChatWindow,
+    getUsername: function() {
+      return username;
+    }
   };
 })($);

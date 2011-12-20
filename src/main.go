@@ -8,6 +8,7 @@ import (
     "json"
     "os"
     "rand"
+    "regexp"
     "runtime"
     "strconv"
     "time"
@@ -15,6 +16,7 @@ import (
 
 var (
     room *Room
+    rollOffRoute *regexp.Regexp
 )
 
 type User struct {
@@ -23,23 +25,17 @@ type User struct {
     quit chan bool
 }
 
+func NewUser(username string) *User {
+    u := &User{Username: username}
+    u.c = make(chan *ChatMessage, 20)
+    return u
+}
+
 type ChatMessage struct {
     MsgType string
     Username string
     Body string
     TimeStamp *time.Time
-}
-
-type Room struct {
-    Users *list.List
-    Messages *ring.Ring
-    c chan *ChatMessage
-}
-
-func NewUser(username string) *User {
-    u := &User{Username: username}
-    u.c = make(chan *ChatMessage, 20)
-    return u
 }
 
 func (m *ChatMessage)WriteToResponse(w http.ResponseWriter) {
@@ -50,6 +46,12 @@ func (m *ChatMessage)WriteToResponse(w http.ResponseWriter) {
     } else {
         w.Write(raw)
     }
+}
+
+type Room struct {
+    Users *list.List
+    Messages *ring.Ring
+    c chan *ChatMessage
 }
 
 func NewRoom() *Room {
@@ -127,6 +129,16 @@ func (r *Room)MessageHistory() []*ChatMessage {
     return messages[0:i]
 }
 
+type RollOff struct {
+    Id string
+    Entries []*RollOffEntry
+}
+
+type RollOffEntry struct {
+    User *User
+    Score int
+}
+
 func (r *Room)Announce(msgText string, isError bool) {
     msg := &ChatMessage{
         Body: msgText,
@@ -201,11 +213,12 @@ func LoginMux(w http.ResponseWriter, r *http.Request) {
     }
 }
 
-func LogWrap(fn func(http.ResponseWriter, *http.Request)) http.HandlerFunc {
+func LogWrap(fn func(http.ResponseWriter, *http.Request), label string) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         if r.RawURL != "/favicon.ico" {
             fmt.Fprintf(os.Stdout, "%s %s\n", r.Method, r.RawURL)
         }
+        fmt.Printf("Handler: %s\n", label)
         fn(w, r)
     }
 }
@@ -277,6 +290,66 @@ func Roll(w http.ResponseWriter, r *http.Request) {
     room.Announce(fmt.Sprintf("%s rolled %d\n", username, num), false)
 }
 
+func RollOffMux(w http.ResponseWriter, r *http.Request) {
+    route := regexp.MustCompile("^/roll-off/(.*)$")
+    matches := route.FindStringSubmatch(r.RawURL)
+    fmt.Printf("%s matching %s? %#v\n", r.RawURL, route.String(), matches)
+    id := matches[1]
+    if id == "" {
+        NewRollOff(w, r)
+    } else {
+        EnterRollOff(w, r)
+    }
+}
+
+func NewRollOff(w http.ResponseWriter, r *http.Request) {
+    username := ParseUsername(r)
+    fmt.Printf("%s starting a roll-off\n", username)
+
+    entry := new(RollOffEntry)
+    entry.Score = rand.Intn(100) + 1
+    entry.User = room.GetUser(username)
+
+    rolloff := new(RollOff)
+    rolloff.Id = randomString(20)
+    rolloff.Entries = []*RollOffEntry{entry}
+
+    linkId := fmt.Sprintf("%s-link", rolloff.Id)
+    spanId := fmt.Sprintf("%s-span", rolloff.Id)
+    appendTag := fmt.Sprintf(`<br /><a href='javascript:void(0);' id='%s'>click here to join the roll-off.</a>`, linkId)
+
+    script := fmt.Sprintf(`<span id="%s">%s has started a roll off!<br />%s rolled %d</span>
+    <script>
+      console.log("This is injected.  My username: ", Chat.getUsername());
+      if(Chat.getUsername() != "%s") {
+        console.log("Injected link.");
+        $("#%s").append("%s");
+        $("#%s").click(function(event){
+          $.ajax({
+            type: "POST",
+            url: "/roll-off-entry/%s",
+            async: true,
+            timeout: 60000,
+            success: function(data) {
+              $(this).remove();
+            },
+            error: function(XMLHttpRequest, textStatus, errorThrown) {
+              console.log(XMLHttpRequest, textStatus, errorThrown);
+            }
+          });
+        });
+      } else {
+        console.log("Did not inject link.");
+      }
+    </script>`, spanId, username, username, entry.Score, username, spanId, appendTag, linkId, rolloff.Id)
+    fmt.Println(script)
+    room.Announce(script, false)
+}
+
+func EnterRollOff(w http.ResponseWriter, r *http.Request) {
+    //linkId := fmt.Sprintf("%s-link", id)
+}
+
 func main() {
     runtime.GOMAXPROCS(8)
     port := "0.0.0.0:8080"
@@ -284,12 +357,29 @@ func main() {
     staticDir := http.Dir("/projects/go/chat/static")
     staticServer := http.FileServer(staticDir)
 
-    http.HandleFunc("/", LogWrap(Home))
-    http.HandleFunc("/feed", LogWrap(FeedMux))
-    http.HandleFunc("/login", LogWrap(LoginMux))
-    http.HandleFunc("/users", LogWrap(GetUsers))
-    http.HandleFunc("/roll", LogWrap(Roll))
+    http.HandleFunc("/", LogWrap(Home, "Home"))
+    http.HandleFunc("/feed", LogWrap(FeedMux, "FeedMux"))
+    http.HandleFunc("/login", LogWrap(LoginMux, "LoginMux"))
+    http.HandleFunc("/users", LogWrap(GetUsers, "GetUsers"))
+    http.HandleFunc("/roll", LogWrap(Roll, "Roll"))
+    http.HandleFunc("/roll-off", LogWrap(NewRollOff, "NewRollOff"))
+    http.HandleFunc("/roll-off-entry/", LogWrap(EnterRollOff, "EnterRollOff"))
     http.Handle("/static/", http.StripPrefix("/static", staticServer))
     fmt.Printf("Serving at %s ----------------------------------------------------\n", port)
     http.ListenAndServe(port, nil)
 }
+
+/*------------------------------------------------------------------------------
+*
+* Odds and ends
+*
+*-----------------------------------------------------------------------------*/
+
+func randomString(length int) string {
+    raw := make([]int, length)
+    for i := range raw {
+        raw[i] = 97 + rand.Intn(26)
+    }
+    return string(raw)
+}
+
