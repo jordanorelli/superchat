@@ -5,6 +5,7 @@ import (
     "container/ring"
     "fmt"
     "http"
+    "io/ioutil"
     "json"
     "os"
     "rand"
@@ -17,6 +18,7 @@ import (
 var (
     room *Room
     rollOffRoute *regexp.Regexp
+    urlPattern *regexp.Regexp
 )
 
 type User struct {
@@ -45,6 +47,15 @@ func (m *ChatMessage)WriteToResponse(w http.ResponseWriter) {
         fmt.Fprintf(os.Stderr, "something got fucked up in json.Marshal.\n")
     } else {
         w.Write(raw)
+    }
+}
+
+func (m *ChatMessage)Links() {
+    matches := urlPattern.FindAllStringIndex(m.Body, -1)
+    for _, match := range(matches) {
+        url := m.Body[match[0]:match[1]]
+        m.Body = m.Body[:match[0]] + GetEmbed(url) + m.Body[match[1]:]
+        fmt.Println(m.Body)
     }
 }
 
@@ -108,6 +119,7 @@ func (r *Room)RemoveUser(username string) bool {
 }
 
 func (r *Room)AddMessage(msg *ChatMessage) {
+    msg.Links()
     r.Messages = r.Messages.Next()
     r.Messages.Value = msg
     for elem := r.Users.Front(); elem != nil; elem = elem.Next() {
@@ -261,7 +273,7 @@ func Post(w http.ResponseWriter, r *http.Request) {
     if err != nil {
         http.Error(w, "Unable to parse incoming chat message", http.StatusInternalServerError)
     }
-    room.AddMessage(m)
+    go room.AddMessage(m)
     fmt.Fprintf(os.Stdout, "\t%s: %s\n", m.Username, m.Body)
 }
 
@@ -350,12 +362,36 @@ func EnterRollOff(w http.ResponseWriter, r *http.Request) {
     //linkId := fmt.Sprintf("%s-link", id)
 }
 
+var GetEmbed = func() func(string) string {
+    client := new(http.Client)
+    key := "83518a4c0f8f11e186fe4040d3dc5c07"
+    templateString := "http://api.embed.ly/1/oembed?key=" + key + "&url=%s"
+    return func(url string) string {
+        url = fmt.Sprintf(templateString, url)
+        res, err := client.Get(url)
+        if err != nil {
+            fmt.Fprintf(os.Stderr, "Error in GetEmbed: %s\n", err)
+            return ""
+        }
+        defer res.Body.Close()
+        contents, err := ioutil.ReadAll(res.Body)
+        if err != nil {
+            fmt.Fprintf(os.Stderr, "Error in GetEmbed 2: %s\n", err)
+            return ""
+        }
+        var raw map[string] interface{}
+        json.Unmarshal(contents, &raw)
+        return raw["html"].(string)
+    }
+}()
+
 func main() {
     runtime.GOMAXPROCS(8)
     port := "0.0.0.0:8080"
     room = NewRoom()
     staticDir := http.Dir("/projects/go/chat/static")
     staticServer := http.FileServer(staticDir)
+    urlPattern = regexp.MustCompile("https?://[^ \t\n]+")
 
     http.HandleFunc("/", LogWrap(Home, "Home"))
     http.HandleFunc("/feed", LogWrap(FeedMux, "FeedMux"))
@@ -374,6 +410,7 @@ func main() {
 * Odds and ends
 *
 *-----------------------------------------------------------------------------*/
+
 
 func randomString(length int) string {
     raw := make([]int, length)
