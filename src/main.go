@@ -367,8 +367,8 @@ var GetEmbed = func() func(string) string {
     key := "83518a4c0f8f11e186fe4040d3dc5c07"
     templateString := "http://api.embed.ly/1/oembed?key=" + key + "&url=%s"
     return func(url string) string {
-        url = fmt.Sprintf(templateString, url)
-        res, err := client.Get(url)
+        requestUrl := fmt.Sprintf(templateString, url)
+        res, err := client.Get(requestUrl)
         if err != nil {
             fmt.Fprintf(os.Stderr, "Error in GetEmbed: %s\n", err)
             return ""
@@ -381,13 +381,17 @@ var GetEmbed = func() func(string) string {
         }
         var raw map[string] interface{}
         json.Unmarshal(contents, &raw)
-        return raw["html"].(string)
+        fmt.Println(raw)
+        if html, contains := raw["html"]; contains {
+            return html.(string)
+        }
+        return url
     }
 }()
 
 func main() {
     runtime.GOMAXPROCS(8)
-    port := "0.0.0.0:8080"
+    port := "chat.jordanorelli.com:8080"
     room = NewRoom()
     staticDir := http.Dir("/projects/go/chat/static")
     staticServer := http.FileServer(staticDir)
