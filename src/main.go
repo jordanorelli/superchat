@@ -4,6 +4,7 @@ import (
     "container/list"
     "container/ring"
     "fmt"
+    "github.com/russross/blackfriday"
     "http"
     "io/ioutil"
     "json"
@@ -51,12 +52,9 @@ func (m *ChatMessage)WriteToResponse(w http.ResponseWriter) {
 }
 
 func (m *ChatMessage)Links() {
-    matches := urlPattern.FindAllStringIndex(m.Body, -1)
-    for _, match := range(matches) {
-        url := m.Body[match[0]:match[1]]
-        m.Body = m.Body[:match[0]] + GetEmbed(url) + m.Body[match[1]:]
-        fmt.Println(m.Body)
-    }
+    // m.Body = urlPattern.ReplaceAllStringFunc(m.Body, GetEmbed)
+    m.Body = string(Render([]byte(m.Body)))
+    // fmt.Print(m.Body)
 }
 
 type Room struct {
@@ -362,6 +360,10 @@ func EnterRollOff(w http.ResponseWriter, r *http.Request) {
     //linkId := fmt.Sprintf("%s-link", id)
 }
 
+func Render(raw []byte) []byte {
+    return blackfriday.MarkdownCommon(raw)
+}
+
 var GetEmbed = func() func(string) string {
     client := new(http.Client)
     key := "83518a4c0f8f11e186fe4040d3dc5c07"
@@ -391,7 +393,7 @@ var GetEmbed = func() func(string) string {
 
 func main() {
     runtime.GOMAXPROCS(8)
-    port := "chat.jordanorelli.com:8080"
+    port := "0.0.0.0:8080"
     room = NewRoom()
     staticDir := http.Dir("/projects/go/chat/static")
     staticServer := http.FileServer(staticDir)

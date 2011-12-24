@@ -1,6 +1,6 @@
-body { 
-  background:#fff; 
-  color:#000; 
+body {
+  background:#fff;
+  color:#000;
   font-size:.9em;
   padding: 0;
   margin: 0;
@@ -95,7 +95,8 @@ h1 .subtitle {
 
 #logout-button {
   float: right;
-  margin-right: 20px;
+  margin-right: 10px;
+  margin-bottom: 2px;
 }
 #logout-button:link {
   text-decoration: none;
@@ -108,20 +109,18 @@ h1 .subtitle {
   color: #888888;
 }
 
-#current-username, #message, #send-button {
-  padding: .5%;
-}
-
 #current-username {
-  width: 10%;
   display: block;
-  float: left;
+  float: right;
   text-align: right;
+  margin: 0 8px 8px 0;
 }
 #message {
-  width: 78%;
+  width: 100%;
   resize: none;
   height: 4em;
+  outline: none;
+  border: none;
 }
 #send-button {
   width: 8%;

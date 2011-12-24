@@ -9,7 +9,6 @@ var Chat = (function($) {
   var $messageContainer;        // element to hold messages as they arrive
   var messageTemplate;          // a Mustache template for rendering messages
   var $composeMessageField;     // allows the user to input a chat message
-  var $sendMessageButton;       // element to attach a "send message" function to
   var $logoutButton;            // element to which a logout function is bound
   var $chatErrors;              // an element where we will place chat errors
 
@@ -166,7 +165,7 @@ var Chat = (function($) {
 
   // processes a send message request.  The message is sent as a POST request,
   // with the message text defined in the POST body.
-  var sendMessageClick = function(event) {
+  var sendMessage = function(event) {
     // var $this = $(this);
     var message = $.trim($composeMessageField.val());
     // $this.attr("disabled", "disabled");
@@ -340,7 +339,6 @@ var Chat = (function($) {
     $logoutButton = $(config.logoutButton);
     $loginElements = $(config.loginElements);
     $loginErrors = $(config.loginErrors);
-    $sendMessageButton = $(config.sendMessageButton);
     $composeMessageField = $(config.composeMessageField);
     $usernameField = $(config.usernameField);
     $usernameDisplay = $(config.usernameDisplay);
@@ -357,14 +355,10 @@ var Chat = (function($) {
       event.preventDefault();
     });
 
-    $composeMessageField.keyup(function(event) {
-      setButtonBehavior($(this), $sendMessageButton);
-    });
-
     $composeMessageField.keydown(function(event) {
       if(event.keyCode == 13 && !event.shiftKey) {
         if($.trim($composeMessageField.val())){
-          $sendMessageButton.click();
+          sendMessage(event);
         } else {
           return false;
         }
@@ -387,11 +381,6 @@ var Chat = (function($) {
 
     $usernameField.keyup(function(event) {
       setButtonBehavior($(this), $loginButton);
-    });
-
-    $sendMessageButton.click(function(event) {
-      if($.trim($composeMessageField.val()))
-        sendMessageClick(event);
     });
 
     console.log("Build chat window complete!  Username: ", username);
