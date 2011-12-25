@@ -6,38 +6,25 @@ var Chat = (function($) {
   var $chatElements;            // elements shown when the user is logged in
   var $usernameDisplay;         // shows the user their current username
   var $messageContainer;        // element to hold messages as they arrive
-  var messageTemplate;          // a Mustache template for rendering messages
+  var messageWrapperTemplate;   // a Mustache template to render the outer
+                                // message context.  That is the username and,
+                                // in the future, user controls.
+  var messageBodyTemplate;      // a Mustache template to render the innter
+                                // messsage context.  That is, the body of the
+                                // message and a timestamp.
+
   var $composeMessageField;     // allows the user to input a chat message
   var $logoutButton;            // element to which a logout function is bound
   var $chatErrors;              // an element where we will place chat errors
 
   var username = '';            // holds the currently logged in username.  If this
+  var lastMessageUsername = ''; // retains the username of the last message, so
+                                // that if the same user sends subsequent
+                                // messages we put them within the same div and
+                                // don't repeat their username
   var loggedIn = false;
-  var lastMessageTimestamp = 0; // Timestamp of the last message received
-                                // Timestamp is represented as unix epoch time, in
-                                // milliseconds.  Probably should truncate that.
   var errorCount = 0;
   var debug = true;
-
-  // Removes (some) HTML characters to prevent HTML injection.
-  var sanitize = function(text) {
-    return text.replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  };
-
-  // Formats the message for display.
-  // Replaces newlines with the <br /> element
-  // replaces tabs with 2-spaces
-  // replaces leading spaces with non-breaking spaces
-  // replaces url's with active links (open a new window)
-  var format = function(text) {
-    return text.replace(/^\t*/, "&nbsp;&nbsp;")
-    .replace(/\r\n/g, "<br/>")
-    .replace(/\n/g, "<br/>")
-    .replace(/\s/g, "&nbsp;")
-    .replace(/(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig, '<a href="$1" target="_blank">$1</a>');
-  };
 
   // Scrolls the window to the bottom of the chat dialogue.
   var scrollToEnd = function() {
@@ -125,7 +112,6 @@ var Chat = (function($) {
     username = '';
     console.log("Cleared username");
     loggedIn = false;
-    lastMessageTimestamp = 0;
     $usernameField.val('');
     $usernameField.focus();
   };
@@ -133,12 +119,18 @@ var Chat = (function($) {
   // Given a list of messages, appends them to the $messageContainer element,
   // according to the Mustache template defined as messageTemplate.
   var displayMessages = function(messages) {
+    console.log("Displaying messages ", messages);
     $(messages).each(function(){
-      // this.Body = format(sanitize(this.Body));
-      $messageContainer.append(renderMessage(this));
-      if(this.Timestamp && this.Timestamp > lastMessageTimestamp) {
-        lastMessageTimestamp = this.Timestamp;
+      console.log("Checking username...");
+      if(this.Username != lastMessageUsername) {
+        console.log("New username...");
+        $(".most-recent-message").removeClass("most-recent-message");
+        $messageContainer.append(renderMessageWrapper(this));
+        console.log("added message wrapper");
       }
+      $(".most-recent-message").append(renderMessageBody(this));
+      console.log("added message body");
+      lastMessageUsername = this.Username;
     });
     scrollToEnd();
   };
@@ -147,20 +139,26 @@ var Chat = (function($) {
     $messageContainer.empty();
   };
 
-  // Renders a message object using the Mustache template stored in the
-  // variable messageTemplate.  Formats the timestamp accordingly. */
-  var renderMessage = function(message) {
+  var formatTime = function(timestamp) {
     var date = new Date();
-    console.log(message.Timestamp);
-    date.setTime(message.Timestamp.Year,
-                message.Timestamp.Month,
-                message.Timestamp.Day,
-                message.Timestamp.Hour,
-                message.Timestamp.Minute,
-                message.Timestamp.Seconds,
-                message.Timestamp.Nanoseconds * 1000);
-    message.formattedTime = date.toString().split(' ')[4];
-    return Mustache.to_html(messageTemplate, message);
+    date.setTime(timestamp.Year, timestamp.Month, timestamp.Day, timestamp.Hour,
+                timestamp.Minute, timestamp.Seconds,
+                timestamp.Nanoseconds * 1000);
+    return date.toString().split(' ')[4];
+  }
+
+  var renderMessageWrapper = function(message) {
+    return Mustache.to_html(messageWrapperTemplate, {
+      username: message.Username,
+      msgtype: message.MsgType
+    });
+  };
+
+  var renderMessageBody = function(message) {
+    return Mustache.to_html(messageBodyTemplate, {
+      formattedTime: formatTime(message.Timestamp),
+      body: message.Body
+    });
   };
 
   // Given an input element and a button element, disables the button if the
@@ -353,7 +351,8 @@ var Chat = (function($) {
     $usernameField = $(config.usernameField);
     $usernameDisplay = $(config.usernameDisplay);
     $chatErrors = $(config.chatErrors);
-    messageTemplate = config.messageTemplate;
+    messageBodyTemplate = config.messageBodyTemplate;
+    messageWrapperTemplate = config.messageWrapperTemplate;
 
     $logoutButton.click(function(event) {
       logout();

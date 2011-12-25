@@ -194,10 +194,10 @@ h1 .subtitle {
 }
 .message-body {
   float: left;
-  text-align: left;
 }
 .message-timestamp {
   float: left;
+  clear: left;
   text-align: right;
   width: 60px;
   padding-right: 8px;

@@ -7,12 +7,16 @@
     <script src="static/js/jquery.js"></script>
     <script src="static/js/chat.js"></script>
     <script src="static/js/mustache.js"></script>
-    <script id="message-template" type="text/plain">
-      <div class="message {{MsgType}}">
-        <div class="message-username">{{Username}}</div>
-        <div class="message-timestamp">{{formattedTime}}</div>
-        <div class="message-body">{{{Body}}}</div>
+    <script id="message-wrapper-template" type="text/plain">
+      <div class="message {{msgtype}}">
+        <div class="message-username">{{username}}</div>
+        <div class="message-body-wrapper most-recent-message">
+        </div>
       </div>
+    </script>
+    <script id="message-body-template" type="text/plain">
+        <div class="message-timestamp">{{formattedTime}}</div>
+        <div class="message-body">{{{body}}}</div>
     </script>
     <script>
       $(document).ready(function() {
@@ -27,7 +31,9 @@
           usernameDisplay: "#current-username",
           composeMessageField: "#message-input",
           chatErrors: "#chat-errors",
-          messageTemplate: $("#message-template").html()
+          messageWrapperTemplate: $("#message-wrapper-template").html(),
+          messageBodyTemplate: $("#message-body-template").html(),
+          recentMessageSelector: ".most-recent-message"
         });
 
         $("#username").focus();

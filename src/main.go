@@ -36,10 +36,24 @@ func NewUser(username string) *User {
 }
 
 type ChatMessage struct {
+    Id int
     MsgType string
     Username string
     Body string
     Timestamp *time.Time
+}
+
+var NextId = func() func() int {
+    current := 0
+    return func() int {
+        current += 1
+        return current
+    }
+}()
+
+func NewMessage(username string, body string, msgtype string) *ChatMessage {
+    return &ChatMessage{Username: username, Body: body, MsgType: msgtype,
+                        Timestamp: time.UTC(), Id: NextId()}
 }
 
 func (m *ChatMessage)WriteToResponse(w http.ResponseWriter) {
@@ -160,12 +174,9 @@ type RollOffEntry struct {
 }
 
 func (r *Room)Announce(msgText string, isError bool) {
-    msg := &ChatMessage{
-        Body: msgText,
-        Timestamp: time.UTC(),
-    }
-
-    if isError { msg.MsgType = "error" } else { msg.MsgType = "system" }
+    var msgType string
+    if isError { msgType = "error" } else { msgType = "system" }
+    msg := NewMessage("system", msgText, msgType)
     r.AddMessage(msg)
 }
 
@@ -212,7 +223,7 @@ func ParseMessage(r *http.Request) (*ChatMessage, os.Error) {
     }
     from := room.GetUser(ParseUsername(r))
 
-    m := &ChatMessage{Username: from.Username, Timestamp: time.UTC(), MsgType: "user"}
+    m := &ChatMessage{Username: from.Username, Timestamp: time.UTC(), MsgType: "user", Id: NextId()}
     raw := make([]byte, msgLength)
     r.Body.Read(raw)
     if err := json.Unmarshal(raw, m); err != nil {
