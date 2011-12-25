@@ -1,7 +1,6 @@
 var Chat = (function($) {
   var $loginElements;           // elements shown when the user is logged out
   var $usernameField;           // allows the user to input a desired username
-  var $loginButton;             // element to which a login function is bound
   var $loginErrors;             // an element where we will place login errors
 
   var $chatElements;            // elements shown when the user is logged in
@@ -60,6 +59,11 @@ var Chat = (function($) {
       handleError($loginErrors, "", "desired username " + desiredUsername + " contains invalid whitespace");
       return false;
     };
+    if(desiredUsername.length >= 25) {
+      handleError($loginErrors, "", "That username is too long.  Max is 24 characters.");
+      return false;
+    }
+
     $.ajax({
       type: "POST",
       url: "/login",
@@ -132,8 +136,8 @@ var Chat = (function($) {
     $(messages).each(function(){
       // this.Body = format(sanitize(this.Body));
       $messageContainer.append(renderMessage(this));
-      if(this.TimeStamp && this.TimeStamp > lastMessageTimestamp) {
-        lastMessageTimestamp = this.TimeStamp;
+      if(this.Timestamp && this.Timestamp > lastMessageTimestamp) {
+        lastMessageTimestamp = this.Timestamp;
       }
     });
     scrollToEnd();
@@ -147,7 +151,14 @@ var Chat = (function($) {
   // variable messageTemplate.  Formats the timestamp accordingly. */
   var renderMessage = function(message) {
     var date = new Date();
-    date.setTime(message.timestamp);
+    console.log(message.Timestamp);
+    date.setTime(message.Timestamp.Year,
+                message.Timestamp.Month,
+                message.Timestamp.Day,
+                message.Timestamp.Hour,
+                message.Timestamp.Minute,
+                message.Timestamp.Seconds,
+                message.Timestamp.Nanoseconds * 1000);
     message.formattedTime = date.toString().split(' ')[4];
     return Mustache.to_html(messageTemplate, message);
   };
@@ -335,7 +346,6 @@ var Chat = (function($) {
   var buildChatWindow = function(config) {
     $chatElements = $(config.chatElements);
     $messageContainer = $(config.messageContainer);
-    $loginButton = $(config.loginButton);
     $logoutButton = $(config.logoutButton);
     $loginElements = $(config.loginElements);
     $loginErrors = $(config.loginErrors);
@@ -344,11 +354,6 @@ var Chat = (function($) {
     $usernameDisplay = $(config.usernameDisplay);
     $chatErrors = $(config.chatErrors);
     messageTemplate = config.messageTemplate;
-
-    $loginButton.click(function(event) {
-      login();
-      event.preventDefault();
-    });
 
     $logoutButton.click(function(event) {
       logout();
@@ -370,17 +375,13 @@ var Chat = (function($) {
     $usernameField.keydown(function(event) {
       if(event.keyCode == 13 ){
         if($.trim($usernameField.val())){
-          $loginButton.click();
+          login();
         }
       }
     });
 
     $(window).unload(function(event){
       logout();
-    });
-
-    $usernameField.keyup(function(event) {
-      setButtonBehavior($(this), $loginButton);
     });
 
     console.log("Build chat window complete!  Username: ", username);

@@ -1,6 +1,7 @@
 package main
 
 import (
+    "bytes"
     "container/list"
     "container/ring"
     "fmt"
@@ -13,13 +14,13 @@ import (
     "regexp"
     "runtime"
     "strconv"
+    "template"
     "time"
 )
 
 var (
     room *Room
     rollOffRoute *regexp.Regexp
-    urlPattern *regexp.Regexp
 )
 
 type User struct {
@@ -38,7 +39,7 @@ type ChatMessage struct {
     MsgType string
     Username string
     Body string
-    TimeStamp *time.Time
+    Timestamp *time.Time
 }
 
 func (m *ChatMessage)WriteToResponse(w http.ResponseWriter) {
@@ -51,10 +52,19 @@ func (m *ChatMessage)WriteToResponse(w http.ResponseWriter) {
     }
 }
 
+var urlPattern *regexp.Regexp = regexp.MustCompile("https?://[^ \t\n]+")
 func (m *ChatMessage)Links() {
-    // m.Body = urlPattern.ReplaceAllStringFunc(m.Body, GetEmbed)
+    fmt.Println(m.Body)
     m.Body = string(Render([]byte(m.Body)))
-    // fmt.Print(m.Body)
+    matches := urlPattern.FindAllStringIndex(m.Body, -1)
+    for _, match := range(matches) {
+        start, end := match[0], match[1]
+        leader := `href="`
+        if start > len(leader) && m.Body[start-len(leader):start] == leader {
+            continue
+        }
+        m.Body = m.Body[:start] + GetEmbed(m.Body[start:end]) + m.Body[end:]
+    }
 }
 
 type Room struct {
@@ -152,7 +162,7 @@ type RollOffEntry struct {
 func (r *Room)Announce(msgText string, isError bool) {
     msg := &ChatMessage{
         Body: msgText,
-        TimeStamp: time.UTC(),
+        Timestamp: time.UTC(),
     }
 
     if isError { msg.MsgType = "error" } else { msg.MsgType = "system" }
@@ -202,7 +212,7 @@ func ParseMessage(r *http.Request) (*ChatMessage, os.Error) {
     }
     from := room.GetUser(ParseUsername(r))
 
-    m := &ChatMessage{Username: from.Username, TimeStamp: time.UTC(), MsgType: "user"}
+    m := &ChatMessage{Username: from.Username, Timestamp: time.UTC(), MsgType: "user"}
     raw := make([]byte, msgLength)
     r.Body.Read(raw)
     if err := json.Unmarshal(raw, m); err != nil {
@@ -361,7 +371,26 @@ func EnterRollOff(w http.ResponseWriter, r *http.Request) {
 }
 
 func Render(raw []byte) []byte {
-    return blackfriday.MarkdownCommon(raw)
+    htmlFlags := 0
+    htmlFlags |= blackfriday.HTML_USE_XHTML
+    htmlFlags |= blackfriday.HTML_USE_SMARTYPANTS
+    htmlFlags |= blackfriday.HTML_SMARTYPANTS_FRACTIONS
+    htmlFlags |= blackfriday.HTML_SMARTYPANTS_LATEX_DASHES
+    renderer := blackfriday.HtmlRenderer(htmlFlags, "", "")
+
+    // set up the parser
+    extensions := 0
+    extensions |= blackfriday.EXTENSION_NO_INTRA_EMPHASIS
+    extensions |= blackfriday.EXTENSION_TABLES
+    extensions |= blackfriday.EXTENSION_FENCED_CODE
+    extensions |= blackfriday.EXTENSION_STRIKETHROUGH
+    extensions |= blackfriday.EXTENSION_SPACE_HEADERS
+
+    escaped := new(bytes.Buffer)
+    template.HTMLEscape(escaped, raw)
+    rendered := blackfriday.Markdown(escaped.Bytes(), renderer, extensions)
+    fmt.Println(string(rendered))
+    return rendered
 }
 
 var GetEmbed = func() func(string) string {
@@ -397,7 +426,6 @@ func main() {
     room = NewRoom()
     staticDir := http.Dir("/projects/go/chat/static")
     staticServer := http.FileServer(staticDir)
-    urlPattern = regexp.MustCompile("https?://[^ \t\n]+")
 
     http.HandleFunc("/", LogWrap(Home, "Home"))
     http.HandleFunc("/feed", LogWrap(FeedMux, "FeedMux"))

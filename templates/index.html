@@ -8,11 +8,11 @@
     <script src="static/js/chat.js"></script>
     <script src="static/js/mustache.js"></script>
     <script id="message-template" type="text/plain">
-      <li class="{{MsgType}}">
-        <span class="message-username">{{Username}}</span>
-        <span class="message-body">{{{Body}}}</span>
-        <!--<span class="message-timestamp">{{TimeStamp}}</span>-->
-      </li>
+      <div class="message {{MsgType}}">
+        <div class="message-username">{{Username}}</div>
+        <div class="message-timestamp">{{formattedTime}}</div>
+        <div class="message-body">{{{Body}}}</div>
+      </div>
     </script>
     <script>
       $(document).ready(function() {
@@ -25,7 +25,7 @@
           loginErrors: "#login-errors",
           usernameField: "#username",
           usernameDisplay: "#current-username",
-          composeMessageField: "#message",
+          composeMessageField: "#message-input",
           chatErrors: "#chat-errors",
           messageTemplate: $("#message-template").html()
         });
@@ -41,20 +41,16 @@
     </div>
     <div id="content">
       <div id="login-container">
-        <label id="whoareyou" for="username">Who are you?</label>
         <input id="username" type="text"></input>
-        <input id="login-button" type="submit" name="join" value="join"
-            disabled="disabled" />
         <span id="login-errors" class="errors" style="display: none;"></span>
-
       </div>
       <div id="chat-container" style="display: none;">
-        <ul id="message-container">
-        </ul>
+        <div id="message-container">
+        </div>
         <div id="footer">
           <div id="input-container">
             <div id="send-form">
-              <textarea id="message"></textarea>
+              <textarea id="message-input"></textarea>
             </div>
           </div>
         </div>
