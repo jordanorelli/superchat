@@ -38,8 +38,23 @@ var Chat = (function($) {
   // A primitve UI state controller. Call with true to show the "logged in" UI;
   // call with false to show the "logged out" UI.
   var setChatDisplay = function(enabled) {
-    $loginElements.toggle(!enabled);
-    $chatElements.toggle(enabled);
+    var appearing, disappearing, focusTarget;
+    if(enabled) {
+      appearing = $chatElements;
+      disappearing = $loginElements;
+      focusTarget = $composeMessageField;
+    } else {
+      appearing = $loginElements;
+      disappearing = $chatElements;
+      focusTarget = $usernameField;
+    }
+    disappearing.animate({opacity: 0.0}, 150, function() {
+      disappearing.hide();
+      appearing.show();
+      appearing.animate({opacity: 1.0}, 150, function() {
+        focusTarget.focus();
+      });
+    });
   };
 
   // Performs an ajax call to log the user in.  Sends an empty POST request
@@ -54,6 +69,8 @@ var Chat = (function($) {
       handleError($loginErrors, "", "That username is too long.  Max is 24 characters.");
       return false;
     }
+
+    $("body").animate({background: "#fff"}, 2000);
 
     $.ajax({
       type: "POST",

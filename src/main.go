@@ -21,6 +21,7 @@ import (
 var (
     room *Room
     rollOffRoute *regexp.Regexp
+    homeTemplate *template.Template
 )
 
 type User struct {
@@ -239,7 +240,8 @@ func Home(w http.ResponseWriter, r *http.Request) {
     }
     */
     if r.RawURL == "/favicon.ico" { return }
-    http.ServeFile(w, r, "templates/index.html")
+    // http.ServeFile(w, r, "templates/index.html")
+    homeTemplate.Execute(w, new(interface{}))
 }
 
 func LoginMux(w http.ResponseWriter, r *http.Request) {
@@ -442,6 +444,7 @@ func main() {
     room = NewRoom()
     staticDir := http.Dir("/projects/go/chat/static")
     staticServer := http.FileServer(staticDir)
+    homeTemplate = template.Must(template.ParseFile("templates/index.html"))
 
     http.HandleFunc("/", LogWrap(Home, "Home"))
     http.HandleFunc("/feed", LogWrap(FeedMux, "FeedMux"))

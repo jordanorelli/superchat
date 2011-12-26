@@ -1,17 +1,30 @@
 body {
-  background:#fff;
+  background: #fff;
   color:#000;
   font-size:.9em;
   padding: 0;
   margin: 0;
 }
 
-h1 {
-  padding: 0 0 0 .425em;
-  margin: 0;
-  font-size: 16pt;
-  display: inline;
-  float: left;
+#login-container {
+  width: 100%;
+}
+
+#username {
+  cursor: auto;
+  display: block;
+  margin: 48px auto 0 auto;
+  width: 18em;
+  line-height: 1.8em;
+  outline: none;
+  border: 1px solid #AAAAAA;
+  border-radius: 5px;
+  font: 17px arial, sans-serif;
+  height: 1.8em;
+}
+
+#chat-container {
+  margin-top: 48px;
 }
 
 #header {
@@ -27,78 +40,12 @@ h1 {
   min-width: 600px;
 }
 
-h1 .subtitle {
-  font-size: .5em;
-  color: #fefefe;
-  padding-left: 1em;
-}
-
-#content {
-  margin-top: 48px;
-}
-
-#intro {
-  width: 20em;
-  line-height: 1.5em;
-  margin: 4em 1em 1em 1em;
-}
-
-#login-form {
-  font-size: 14pt;
-  width: 100%;
-  padding: 0;
-  margin: 0;
-}
-
-#send-form {
-  font-size: 14pt;
-  width: 100%;
-  padding: 0;
-  margin: 0;
-}
-
-#footer {
-  font-size: 14pt;
-  position: fixed;
-  bottom: 0;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid black;
-  background: #fff;
-  z-index: 99;
-}
-
-#intro {
-  color: #333;
-  margin: 4em 1em 1em 1em;
-  line-height: 1.5em;
-  text-align: justify;
-  width: 30em;
-}
-
-#whoareyou, #username, #login {
-  color: #000000;
-  margin: .5em;
-  padding: .5em;
-}
-
-#whoareyou {
-  width: 20em;
+#current-username {
   display: block;
-  font-weight: bold;
-}
-
-#username {
-  width: 20em;
-  display: block;
-  margin-left: 2em;
-}
-
-#login-button {
-  width: 5em;
-  margin-left: 17em;
-  display: block;
+  float: right;
+  text-align: right;
+  margin: 0 8px 8px 0;
+  color: #DDDDDD;
 }
 
 #logout-button {
@@ -109,39 +56,32 @@ h1 .subtitle {
   filter:alpha(opacity=80);
 }
 
-#logout-button:link {
-  text-decoration: none;
-  color: #888888;
-}
-
 #logout-button:hover {
   text-decoration: underline;
   opacity: 1.0;
   filter:alpha(opacity=100);
 }
 
-#logout-button:visited {
-  color: #888888;
-}
-
-#current-username {
-  display: block;
-  float: right;
-  text-align: right;
-  margin: 0 8px 8px 0;
-  color: #DDDDDD;
+#message-container {
+  margin: 0;
+  padding: 0 0 6em 0;
+  overflow: hidden;
 }
 
 #message-input {
+  position: fixed;
+  bottom: 0;
+  margin:0;
+  padding: 0 0 0 0.2em;
+  border: none;
+  border-top: 4px solid #aaa;
+  background: #fff;
+  z-index: 99;
+  min-height: 4.8em;
   width: 100%;
   resize: none;
   height: 1em;
   outline: none;
-  border: none;
-}
-
-#send-button {
-  width: 8%;
 }
 
 .errors {
@@ -154,21 +94,9 @@ h1 .subtitle {
   display: block;
 }
 
-#input_box {
-  border: 1px #ccc solid;
-  padding: 10px;
-  width: 100%;
-}
-
 /*------------------------------------------------------------------------------
  * message formatting
  *----------------------------------------------------------------------------*/
-
-#message-container {
-  margin: 0;
-  padding: 0 0 6em 0;
-  overflow: hidden;
-}
 
 /*
 #message-container li.system {
