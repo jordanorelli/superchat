@@ -233,6 +233,11 @@ func ParseMessage(r *http.Request) (*ChatMessage, os.Error) {
 }
 
 func Home(w http.ResponseWriter, r *http.Request) {
+    /*
+    username := ParseUsername(r)
+    if username != "" {
+    }
+    */
     if r.RawURL == "/favicon.ico" { return }
     http.ServeFile(w, r, "templates/index.html")
 }

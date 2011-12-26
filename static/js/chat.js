@@ -12,6 +12,10 @@ var Chat = (function($) {
   var messageBodyTemplate;      // a Mustache template to render the innter
                                 // messsage context.  That is, the body of the
                                 // message and a timestamp.
+  var recentMessageClass;       // class to help us select the div contianing
+                                // the most recent messages, to assist in
+                                // grouping consecutive messages from the same
+                                // user
 
   var $composeMessageField;     // allows the user to input a chat message
   var $logoutButton;            // element to which a logout function is bound
@@ -124,11 +128,11 @@ var Chat = (function($) {
       console.log("Checking username...");
       if(this.Username != lastMessageUsername) {
         console.log("New username...");
-        $(".most-recent-message").removeClass("most-recent-message");
+        $("."+recentMessageClass).removeClass(recentMessageClass);
         $messageContainer.append(renderMessageWrapper(this));
         console.log("added message wrapper");
       }
-      $(".most-recent-message").append(renderMessageBody(this));
+      $("."+recentMessageClass).append(renderMessageBody(this));
       console.log("added message body");
       lastMessageUsername = this.Username;
     });
@@ -140,10 +144,9 @@ var Chat = (function($) {
   };
 
   var formatTime = function(timestamp) {
-    var date = new Date();
-    date.setTime(timestamp.Year, timestamp.Month, timestamp.Day, timestamp.Hour,
-                timestamp.Minute, timestamp.Seconds,
-                timestamp.Nanoseconds * 1000);
+    var date = new Date(Date.UTC(timestamp.Year, timestamp.Month, timestamp.Day,
+                                 timestamp.Hour, timestamp.Minute,
+                                 timestamp.Second));
     return date.toString().split(' ')[4];
   }
 
@@ -353,6 +356,7 @@ var Chat = (function($) {
     $chatErrors = $(config.chatErrors);
     messageBodyTemplate = config.messageBodyTemplate;
     messageWrapperTemplate = config.messageWrapperTemplate;
+    recentMessageClass = config.recentMessageClass;
 
     $logoutButton.click(function(event) {
       logout();
