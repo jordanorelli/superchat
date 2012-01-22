@@ -57,14 +57,6 @@ func NewMessage(username string, body string, msgtype string) *ChatMessage {
                         Timestamp: time.UTC(), Id: NextId()}
 }
 
-func foo() func(int) int {
-    x := 5
-    bar := func(y int) int {
-        return x * y
-    }
-    return bar
-}
-
 func (m *ChatMessage)WriteToResponse(w http.ResponseWriter) {
     w.Header()["Content-Type"] = []string{"application/json"}
     raw, err := json.Marshal([]*ChatMessage{m})
