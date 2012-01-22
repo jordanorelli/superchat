@@ -57,6 +57,14 @@ func NewMessage(username string, body string, msgtype string) *ChatMessage {
                         Timestamp: time.UTC(), Id: NextId()}
 }
 
+func foo() func(int) int {
+    x := 5
+    bar := func(y int) int {
+        return x * y
+    }
+    return bar
+}
+
 func (m *ChatMessage)WriteToResponse(w http.ResponseWriter) {
     w.Header()["Content-Type"] = []string{"application/json"}
     raw, err := json.Marshal([]*ChatMessage{m})
@@ -414,7 +422,7 @@ func Render(raw []byte) []byte {
 var GetEmbed = func() func(string) string {
     client := new(http.Client)
     key := "83518a4c0f8f11e186fe4040d3dc5c07"
-    templateString := "http://api.embed.ly/1/oembed?key=" + key + "&url=%s"
+    templateString := "http://api.embed.ly/1/oembed?key=" + key + "&url=%s" + "&maxwidth=800"
     return func(url string) string {
         requestUrl := fmt.Sprintf(templateString, url)
         res, err := client.Get(requestUrl)
@@ -440,7 +448,7 @@ var GetEmbed = func() func(string) string {
 
 func main() {
     runtime.GOMAXPROCS(8)
-    port := "0.0.0.0:8080"
+    port := "0.0.0.0:8000"
     room = NewRoom()
     staticDir := http.Dir("/projects/go/chat/static")
     staticServer := http.FileServer(staticDir)
