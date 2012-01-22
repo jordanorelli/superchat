@@ -432,9 +432,9 @@ var GetEmbed = func() func(string) string {
         json.Unmarshal(contents, &raw)
         fmt.Println(raw)
         if html, contains := raw["html"]; contains {
-            return html.(string)
+            return `<div style="width: 800px;">` + html.(string) + `</div>`
         }
-        return url
+        return `<a href="` + url + `">` + url + `</a>`
     }
 }()
 
