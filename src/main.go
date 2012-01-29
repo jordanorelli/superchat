@@ -67,7 +67,7 @@ func (m *ChatMessage)WriteToResponse(w http.ResponseWriter) {
     }
 }
 
-var urlPattern *regexp.Regexp = regexp.MustCompile("https?://[^ \t\n]+")
+var urlPattern *regexp.Regexp = regexp.MustCompile(" https?://[^ \t\n]+")
 func (m *ChatMessage)Links() {
     fmt.Println(m.Body)
     m.Body = string(Render([]byte(m.Body)))
@@ -78,7 +78,11 @@ func (m *ChatMessage)Links() {
         if start > len(leader) && m.Body[start-len(leader):start] == leader {
             continue
         }
-        m.Body = m.Body[:start] + GetEmbed(m.Body[start:end]) + m.Body[end:]
+        url := m.Body[start:end]
+        embed, found := GetEmbed(url)
+        if found {
+            m.Body = m.Body[:start] + embed + m.Body[end:]
+        }
     }
 }
 
@@ -340,7 +344,40 @@ func RollOffMux(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+type RolloffScore struct {
+    RollingUser string
+    Score int
+}
+
+func TellUserElement(e *list.Element, m *ChatMessage) {
+    user := e.Value.(*User)
+    user.c <- m
+}
+
+func (m *ChatMessage)Write(p []byte) (n int, err os.Error) {
+    m.Body += string(p)
+    return 0, nil
+}
+
+
 func NewRollOff(w http.ResponseWriter, r *http.Request) {
+    m := NewMessage("system", "", "system")
+
+    var tName string
+    tName = "templates/roll-off/common.html"
+    t := template.Must(template.ParseFile(tName))
+    s := &RolloffScore{RollingUser: "Stanley", Score: 100}
+
+    err := t.Execute(m, s)
+    if err != nil {
+        http.Error(w, err.String(), http.StatusInternalServerError)
+    }
+
+    for elem := room.Users.Front(); elem != nil; elem = elem.Next() {
+        go TellUserElement(elem, m)
+    }
+
+    /*
     username := ParseUsername(r)
     fmt.Printf("%s starting a roll-off\n", username)
 
@@ -358,7 +395,6 @@ func NewRollOff(w http.ResponseWriter, r *http.Request) {
 
     script := fmt.Sprintf(`<span id="%s">%s has started a roll off!<br />%s rolled %d</span>
     <script>
-      console.log("This is injected.  My username: ", Chat.getUsername());
       if(Chat.getUsername() != "%s") {
         console.log("Injected link.");
         $("#%s").append("%s");
@@ -382,12 +418,14 @@ func NewRollOff(w http.ResponseWriter, r *http.Request) {
     </script>`, spanId, username, username, entry.Score, username, spanId, appendTag, linkId, rolloff.Id)
     fmt.Println(script)
     room.Announce(script, false)
+    */
 }
 
 func EnterRollOff(w http.ResponseWriter, r *http.Request) {
     //linkId := fmt.Sprintf("%s-link", id)
 }
 
+// Renders markdown in submitted messages.
 func Render(raw []byte) []byte {
     htmlFlags := 0
     htmlFlags |= blackfriday.HTML_USE_XHTML
@@ -407,34 +445,43 @@ func Render(raw []byte) []byte {
     escaped := new(bytes.Buffer)
     template.HTMLEscape(escaped, raw)
     rendered := blackfriday.Markdown(escaped.Bytes(), renderer, extensions)
-    fmt.Println(string(rendered))
-    return rendered
+    enabled := false
+    if enabled {
+        fmt.Println("Rendered message:")
+        fmt.Println(string(rendered))
+        return rendered
+    }
+    fmt.Println("Raw message:")
+    fmt.Println(string(raw))
+    return raw
 }
 
-var GetEmbed = func() func(string) string {
+var GetEmbed = func() func(string) (string, bool) {
     client := new(http.Client)
     key := "83518a4c0f8f11e186fe4040d3dc5c07"
     templateString := "http://api.embed.ly/1/oembed?key=" + key + "&url=%s" + "&maxwidth=800"
-    return func(url string) string {
+    return func(url string) (string, bool) {
         requestUrl := fmt.Sprintf(templateString, url)
         res, err := client.Get(requestUrl)
         if err != nil {
             fmt.Fprintf(os.Stderr, "Error in GetEmbed: %s\n", err)
-            return ""
+            return "", false
         }
         defer res.Body.Close()
         contents, err := ioutil.ReadAll(res.Body)
         if err != nil {
             fmt.Fprintf(os.Stderr, "Error in GetEmbed 2: %s\n", err)
-            return ""
+            return "", false
         }
         var raw map[string] interface{}
         json.Unmarshal(contents, &raw)
         fmt.Println(raw)
+        // return url, false
         if html, contains := raw["html"]; contains {
-            return `<div style="width: 800px;">` + html.(string) + `</div>`
+            return `<div style="width: 800px;">` + html.(string) + `</div>`, true
         }
-        return `<a href="` + url + `">` + url + `</a>`
+        // return `<a href="` + url + `">` + url + `</a>`
+        return url, false
     }
 }()
 
