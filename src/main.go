@@ -172,6 +172,7 @@ func (r *Room)MessageHistory() []*ChatMessage {
 type RollOff struct {
     Id string
     Entries []*RollOffEntry
+    Open bool
 }
 
 type RollOffEntry struct {
@@ -365,13 +366,27 @@ func (m *ChatMessage)Write(p []byte) (n int, err os.Error) {
     return len(p), nil
 }
 
+func (r *RollOff)Cycle() {
+    time.Sleep(3e10)
+    r.Open = false
+    var winningEntry *RollOffEntry
+    for _, entry := range r.Entries {
+        if winningEntry == nil {
+            winningEntry = entry
+        } else if entry.Score > winningEntry.Score {
+            winningEntry = entry
+        }
+    }
+    room.Announce(fmt.Sprintf("%s wins the roll-off with a score of %d!", winningEntry.User.Username, winningEntry.Score), false)
+}
+
 func NewRollOff(w http.ResponseWriter, r *http.Request) {
     rollingUser := ParseUser(r)
     entry := &RollOffEntry{User: rollingUser, Score: rand.Intn(100) + 1}
 
-    rolloff := new(RollOff)
-    rolloff.Id = randomString(20)
+    rolloff := &RollOff{Id: randomString(20), Open: true}
     rolloff.AddEntry(entry)
+    go rolloff.Cycle()
 
     rolloffs = append(rolloffs, rolloff)
 
