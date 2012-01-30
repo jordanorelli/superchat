@@ -1,4 +1,28 @@
-<span id="stanley">{{.User.Username}} has started a roll off!<br />
+<span id="rolloff-info-{{.RollOff.Id}}">{{.User.Username}} has started a roll off!<br />
 {{.User.Username}} rolled a {{.Score}}!<br />
-<a href="javascript:void(0);">click here to join the roll-off!</a> <a href="javascript:void(0);">no thanks.</a>
+<a href="javascript:void(0);" id="rolloff-join-link-{{.RollOff.Id}}">click here to join the roll-off!</a> <a href="javascript:void(0);" id="rolloff-go-away-{{.RollOff.Id}}">no thanks.</a>
+<script>
+  $(document).ready(function() {
+    $('#rolloff-join-link-{{.RollOff.Id}}').click(function(event) {
+      $.ajax({
+        type: 'POST',
+        url: '/roll-off-entry/{{.RollOff.Id}}',
+        contentType: "application/json; charset=utf-8",
+        dataType: 'json',
+        success: function() {
+          $('#rolloff-join-link-{{.RollOff.Id}}').remove();
+          $('#rolloff-go-away-{{.RollOff.Id}}').remove();
+        }
+      });
 
+      event.preventDefault();
+      event.StopPropagation();
+      return false;
+    });
+
+    $('#rolloff-go-away-{{.RollOff.Id}}').click(function(event) {
+      $('#rolloff-join-link-{{.RollOff.Id}}').remove();
+      $('#rolloff-go-away-{{.RollOff.Id}}').remove();
+    });
+  });
+</script>

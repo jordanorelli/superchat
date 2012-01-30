@@ -20,6 +20,7 @@ import (
 
 var (
     room *Room
+    rolloffs []*RollOff
     rollOffRoute *regexp.Regexp
     homeTemplate *template.Template
 )
@@ -176,6 +177,12 @@ type RollOff struct {
 type RollOffEntry struct {
     User *User
     Score int
+    RollOff *RollOff
+}
+
+func (r *RollOff)AddEntry(e *RollOffEntry) {
+    r.Entries = append(r.Entries, e)
+    e.RollOff = r
 }
 
 func (r *Room)Announce(msgText string, isError bool) {
@@ -362,6 +369,12 @@ func NewRollOff(w http.ResponseWriter, r *http.Request) {
     rollingUser := ParseUser(r)
     entry := &RollOffEntry{User: rollingUser, Score: rand.Intn(100) + 1}
 
+    rolloff := new(RollOff)
+    rolloff.Id = randomString(20)
+    rolloff.AddEntry(entry)
+
+    rolloffs = append(rolloffs, rolloff)
+
     for elem := room.Users.Front(); elem != nil; elem = elem.Next() {
         go func(e *list.Element) {
             var tName string
@@ -377,52 +390,35 @@ func NewRollOff(w http.ResponseWriter, r *http.Request) {
             u.c <- m
         }(elem)
     }
-
-    /*
-    fmt.Printf("%s starting a roll-off\n", username)
-
-    entry := new(RollOffEntry)
-    entry.Score = rand.Intn(100) + 1
-    entry.User = room.GetUser(username)
-
-    rolloff := new(RollOff)
-    rolloff.Id = randomString(20)
-    rolloff.Entries = []*RollOffEntry{entry}
-
-    linkId := fmt.Sprintf("%s-link", rolloff.Id)
-    spanId := fmt.Sprintf("%s-span", rolloff.Id)
-    appendTag := fmt.Sprintf(`<br /><a href='javascript:void(0);' id='%s'>click here to join the roll-off.</a>`, linkId)
-
-    script := fmt.Sprintf(`<span id="%s">%s has started a roll off!<br />%s rolled %d</span>
-    <script>
-      if(Chat.getUsername() != "%s") {
-        console.log("Injected link.");
-        $("#%s").append("%s");
-        $("#%s").click(function(event){
-          $.ajax({
-            type: "POST",
-            url: "/roll-off-entry/%s",
-            async: true,
-            timeout: 60000,
-            success: function(data) {
-              $(this).remove();
-            },
-            error: function(XMLHttpRequest, textStatus, errorThrown) {
-              console.log(XMLHttpRequest, textStatus, errorThrown);
-            }
-          });
-        });
-      } else {
-        console.log("Did not inject link.");
-      }
-    </script>`, spanId, username, username, entry.Score, username, spanId, appendTag, linkId, rolloff.Id)
-    fmt.Println(script)
-    room.Announce(script, false)
-    */
 }
 
 func EnterRollOff(w http.ResponseWriter, r *http.Request) {
-    //linkId := fmt.Sprintf("%s-link", id)
+    id := r.URL.Path[len("/roll-off-entry/"):]
+    fmt.Println("User wishes to enter rolloff ", id)
+    rollingUser := ParseUser(r)
+    entry := &RollOffEntry{User: rollingUser, Score: rand.Intn(100) + 1}
+
+    for _, r := range rolloffs {
+        fmt.Println("Checking rolloff ", r.Id)
+        if r.Id == id {
+            r.AddEntry(entry)
+            for elem := room.Users.Front(); elem != nil; elem = elem.Next() {
+                go func(e *list.Element) {
+                    var tName string
+                    u := e.Value.(*User)
+                    if u == rollingUser {
+                        tName = "templates/roll-off/user-joins.html"
+                    } else {
+                        tName = "templates/roll-off/other-user-joins.html"
+                    }
+                    t := template.Must(template.ParseFile(tName))
+                    m := NewMessage("system", "", "system")
+                    t.Execute(m, entry)
+                    u.c <- m
+                }(elem)
+            }
+        }
+    }
 }
 
 // Renders markdown in submitted messages.
@@ -489,6 +485,7 @@ func main() {
     runtime.GOMAXPROCS(8)
     port := "0.0.0.0:8000"
     room = NewRoom()
+    rolloffs = make([]*RollOff, 0)
     staticDir := http.Dir("/projects/go/chat/static")
     staticServer := http.FileServer(staticDir)
     homeTemplate = template.Must(template.ParseFile("templates/index.html"))
