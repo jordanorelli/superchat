@@ -221,12 +221,16 @@ func ParseUsername(r *http.Request) string {
     return ""
 }
 
+func ParseUser(r *http.Request) *User {
+    return room.GetUser(ParseUsername(r))
+}
+
 func ParseMessage(r *http.Request) (*ChatMessage, os.Error) {
     msgLength, err := strconv.Atoui(r.Header["Content-Length"][0])
     if err != nil {
         fmt.Fprintf(os.Stderr, "unable to convert incoming message content-length to uint.")
     }
-    from := room.GetUser(ParseUsername(r))
+    from := ParseUser(r)
 
     m := &ChatMessage{Username: from.Username, Timestamp: time.UTC(), MsgType: "user", Id: NextId()}
     raw := make([]byte, msgLength)
@@ -344,11 +348,6 @@ func RollOffMux(w http.ResponseWriter, r *http.Request) {
     }
 }
 
-type RolloffScore struct {
-    RollingUser string
-    Score int
-}
-
 func TellUserElement(e *list.Element, m *ChatMessage) {
     user := e.Value.(*User)
     user.c <- m
@@ -356,29 +355,30 @@ func TellUserElement(e *list.Element, m *ChatMessage) {
 
 func (m *ChatMessage)Write(p []byte) (n int, err os.Error) {
     m.Body += string(p)
-    return 0, nil
+    return len(p), nil
 }
 
-
 func NewRollOff(w http.ResponseWriter, r *http.Request) {
-    m := NewMessage("system", "", "system")
-
-    var tName string
-    tName = "templates/roll-off/common.html"
-    t := template.Must(template.ParseFile(tName))
-    s := &RolloffScore{RollingUser: "Stanley", Score: 100}
-
-    err := t.Execute(m, s)
-    if err != nil {
-        http.Error(w, err.String(), http.StatusInternalServerError)
-    }
+    rollingUser := ParseUser(r)
+    entry := &RollOffEntry{User: rollingUser, Score: rand.Intn(100) + 1}
 
     for elem := room.Users.Front(); elem != nil; elem = elem.Next() {
-        go TellUserElement(elem, m)
+        go func(e *list.Element) {
+            var tName string
+            u := e.Value.(*User)
+            if u == rollingUser {
+                tName = "templates/roll-off/rolling-user.html"
+            } else {
+                tName = "templates/roll-off/other-users.html"
+            }
+            t := template.Must(template.ParseFile(tName))
+            m := NewMessage("system", "", "system")
+            t.Execute(m, entry)
+            u.c <- m
+        }(elem)
     }
 
     /*
-    username := ParseUsername(r)
     fmt.Printf("%s starting a roll-off\n", username)
 
     entry := new(RollOffEntry)
@@ -511,7 +511,6 @@ func main() {
 *
 *-----------------------------------------------------------------------------*/
 
-
 func randomString(length int) string {
     raw := make([]int, length)
     for i := range raw {
@@ -519,4 +518,3 @@ func randomString(length int) string {
     }
     return string(raw)
 }
-
