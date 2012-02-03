@@ -68,7 +68,7 @@ func (m *ChatMessage)WriteToResponse(w http.ResponseWriter) {
     }
 }
 
-var urlPattern *regexp.Regexp = regexp.MustCompile(" https?://[^ \t\n]+")
+var urlPattern *regexp.Regexp = regexp.MustCompile("https?://[^ \t\n]+")
 func (m *ChatMessage)Links() {
     fmt.Println(m.Body)
     m.Body = string(Render([]byte(m.Body)))
@@ -456,14 +456,14 @@ func Render(raw []byte) []byte {
     escaped := new(bytes.Buffer)
     template.HTMLEscape(escaped, raw)
     rendered := blackfriday.Markdown(escaped.Bytes(), renderer, extensions)
-    enabled := false
+    enabled := true
+    fmt.Println("Raw message:")
+    fmt.Println(string(raw))
     if enabled {
         fmt.Println("Rendered message:")
         fmt.Println(string(rendered))
         return rendered
     }
-    fmt.Println("Raw message:")
-    fmt.Println(string(raw))
     return raw
 }
 
@@ -487,11 +487,10 @@ var GetEmbed = func() func(string) (string, bool) {
         var raw map[string] interface{}
         json.Unmarshal(contents, &raw)
         fmt.Println(raw)
-        // return url, false
         if html, contains := raw["html"]; contains {
-            return `<div style="width: 800px;">` + html.(string) + `</div>`, true
+            return html.(string), true
+            // return `<div style="width: 800px;">` + html.(string) + `</div>`, true
         }
-        // return `<a href="` + url + `">` + url + `</a>`
         return url, false
     }
 }()
